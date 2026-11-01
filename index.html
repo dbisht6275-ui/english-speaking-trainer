@@ -6,427 +6,377 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>English Speaking Trainer</title>
 <style>
-* { box-sizing: border-box; }
+* {box-sizing:border-box}
 body {
-  margin: 0;
-  padding: 24px 14px;
-  font-family: Arial, sans-serif;
-  background: #eef3fa;
-  color: #18263d;
+  font-family:Arial,sans-serif;
+  background:#eef3fb;
+  margin:0;
+  padding:20px;
+  color:#17233b;
 }
-.container { max-width: 700px; margin: auto; }
-header { text-align: center; margin-bottom: 24px; }
-h1 { margin-bottom: 8px; }
-.subtitle { color: #64748b; }
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 10px;
-  margin-bottom: 16px;
+.card {
+  max-width:650px;
+  margin:30px auto;
+  background:white;
+  padding:30px;
+  border-radius:20px;
+  box-shadow:0 8px 30px #00000012;
 }
-.stat, .card {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px #0000000a;
+h1 {text-align:center;color:#1d4ed8}
+.subtitle {text-align:center;color:#64748b}
+.stats {display:flex;gap:10px;margin:20px 0}
+.stat {
+  flex:1;
+  background:#f1f5f9;
+  padding:15px 5px;
+  border-radius:12px;
+  text-align:center;
 }
-.stat { padding: 16px 8px; text-align: center; }
-.stat strong {
-  display: block;
-  font-size: 25px;
-  color: #2563eb;
-}
-.stat small { color: #64748b; }
-.card { padding: 28px; text-align: center; }
-.category {
-  color: #2563eb;
-  font-weight: bold;
-  margin-bottom: 22px;
-}
+.stat b {display:block;font-size:25px}
 .question {
-  font-size: 27px;
-  font-weight: bold;
-  margin: 22px 0;
-  line-height: 1.6;
+  background:#eff6ff;
+  padding:25px;
+  border-radius:15px;
+  text-align:center;
+  margin:20px 0;
 }
-.instruction { color: #64748b; }
+#hindi {font-size:25px;line-height:1.6}
 button {
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  padding: 13px 19px;
-  margin: 6px;
-  font-size: 15px;
-  cursor: pointer;
+  background:#2563eb;
+  color:white;
+  padding:13px 20px;
+  border:0;
+  border-radius:10px;
+  cursor:pointer;
+  margin:5px;
+  font-size:15px;
 }
-button:disabled { opacity: .5; cursor: not-allowed; }
-.secondary { background: #e7edfb; color: #1946a3; }
-.answerbox {
-  background: #f3f7ff;
-  padding: 16px;
-  border-radius: 12px;
-  margin-top: 20px;
-  text-align: left;
-  overflow-wrap: anywhere;
+button:disabled {opacity:.5}
+.green {background:#059669}
+.gray {background:#475569}
+.controls {text-align:center}
+#answer,#feedback {
+  padding:15px;
+  margin-top:15px;
+  border-radius:12px;
+  background:#f8fafc;
+  overflow-wrap:anywhere;
 }
-.feedback {
-  margin-top: 15px;
-  font-weight: bold;
-  line-height: 1.6;
+#status {text-align:center;color:#64748b}
+select {
+  width:100%;
+  padding:12px;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
 }
-.correct { color: #15803d; }
-.incorrect { color: #c2410c; }
-.status {
-  text-align: center;
-  padding: 10px;
-  color: #64748b;
-  font-size: 13px;
+@media(max-width:500px){
+  .card {padding:16px}
+  #hindi {font-size:21px}
 }
 </style>
 </head>
-
 <body>
-<div class="container">
-  <header>
-    <h1>🎓 English Speaking Trainer</h1>
-    <p class="subtitle">Practice English Every Day</p>
-  </header>
 
-  <div class="stats">
-    <div class="stat">
-      <strong id="total">0</strong>
-      <small>Questions Done</small>
-    </div>
-    <div class="stat">
-      <strong id="correct">0</strong>
-      <small>Correct</small>
-    </div>
-    <div class="stat">
-      <strong id="accuracy">0%</strong>
-      <small>Accuracy</small>
-    </div>
+<div class="card">
+<h1>English Speaking Trainer</h1>
+<p class="subtitle">Practice English with Hindi Sentences</p>
+
+<div class="stats">
+  <div class="stat">
+    <b id="total">0</b>
+    Practiced
   </div>
-
-  <div class="card">
-    <div class="category" id="category">Loading Sheet...</div>
-    <div class="question" id="question">
-      Connecting to Google Sheets...
-    </div>
-    <p class="instruction">
-      Translate this Hindi sentence into English.
-    </p>
-
-    <button onclick="listenHindi()">🔊 Listen</button>
-    <button id="speakBtn" onclick="startSpeaking()">
-      🎤 Speak
-    </button>
-
-    <div class="answerbox">
-      <b>Your Answer:</b>
-      <p id="yourAnswer">Press Speak to answer.</p>
-    </div>
-
-    <div class="feedback" id="feedback"></div>
-
-    <div id="expectedBox" class="answerbox" hidden>
-      <b>Expected English:</b>
-      <p id="expected"></p>
-      <button class="secondary" onclick="listenEnglish()">
-        🔊 Listen in English
-      </button>
-    </div>
-
-    <div style="margin-top:22px">
-      <button class="secondary" onclick="showAnswer()">
-        Show Answer
-      </button>
-      <button onclick="nextQuestion()">Next Question →</button>
-    </div>
+  <div class="stat">
+    <b id="correct">0</b>
+    Correct
   </div>
+  <div class="stat">
+    <b id="accuracy">0%</b>
+    Accuracy
+  </div>
+</div>
 
-  <p class="status" id="status">Loading sentences...</p>
+<label for="category">Select Category</label>
+<select id="category" onchange="nextQuestion()">
+  <option value="All">All Categories</option>
+</select>
+
+<div class="question">
+  <small id="questionCategory">Loading</small>
+  <h2 id="hindi">Connecting to Google Sheets...</h2>
+  <p>Translate into English and speak</p>
+</div>
+
+<div class="controls">
+  <button onclick="listen()">🔊 Listen</button>
+  <button id="speak" class="green" onclick="speak()">🎤 Speak</button>
+</div>
+
+<div id="answer">Your answer will appear here.</div>
+<div id="feedback">Feedback will appear here.</div>
+
+<div class="controls">
+  <button class="gray" onclick="showAnswer()">Show Answer</button>
+  <button onclick="nextQuestion()">Next Question →</button>
+</div>
+
+<p id="status"></p>
 </div>
 
 <script>
 const CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTSI1RsARcz18Kc9h1NnJWDt8pBDf6ErBV8-bLbythiNYyMyR7-mEwj_GumzRVIB_2khhkazsIJ1EkI/pub?gid=0&single=true&output=csv";
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vTSI1RsARcz18Kc9h1NnJWDt8pBDf6ErBV8-bLbythiNYyMyR7-mEwj_GumzRVIB_2khhkazsIJ1EkI/pub?gid=0&single=true&output=csv";
 
 let sentences = [];
-let currentQuestion = null;
-let lastIndex = -1;
+let current = null;
 let recognition = null;
-let answered = false;
 
-const $ = id => document.getElementById(id);
+let history = [];
+try {
+  history = JSON.parse(
+    localStorage.getItem("englishPractice") || "[]"
+  );
+  if (!Array.isArray(history)) history = [];
+} catch(e) {
+  history = [];
+}
 
 function parseCSV(text) {
   const rows = [];
   let row = [], cell = "", quoted = false;
 
-  text = text.replace(/^\uFEFF/, "");
-
-  for (let i = 0; i < text.length; i++) {
+  for (let i=0; i<text.length; i++) {
     const c = text[i];
 
     if (c === '"') {
-      if (quoted && text[i + 1] === '"') {
+      if (quoted && text[i+1] === '"') {
         cell += '"';
         i++;
       } else {
         quoted = !quoted;
       }
-    } else if (c === ',' && !quoted) {
+    } else if (c === "," && !quoted) {
       row.push(cell);
       cell = "";
-    } else if ((c === '\n' || c === '\r') && !quoted) {
-      if (c === '\r' && text[i + 1] === '\n') i++;
+    } else if ((c === "\n" || c === "\r") && !quoted) {
+      if (c === "\r" && text[i+1] === "\n") i++;
       row.push(cell);
-      if (row.some(x => x.trim())) rows.push(row);
+      rows.push(row);
       row = [];
       cell = "";
     } else {
       cell += c;
     }
   }
-
-  row.push(cell);
-  if (row.some(x => x.trim())) rows.push(row);
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
   return rows;
 }
 
 async function loadSentences() {
+  const status = document.getElementById("status");
+
   try {
-    $("status").textContent = "Connecting to Google Sheets...";
-
     const response = await fetch(CSV_URL, {
-      cache: "no-store"
+      cache:"no-store"
     });
+    if (!response.ok) throw new Error(
+      "HTTP " + response.status
+    );
 
-    if (!response.ok) {
-      throw new Error("HTTP " + response.status);
+    const csv = await response.text();
+    const rows = parseCSV(csv);
+
+    const headers = rows.shift().map(
+      x => x.trim().replace(/^\uFEFF/,"")
+    );
+
+    const h = headers.indexOf("Hindi");
+    const e = headers.indexOf("English");
+    const c = headers.indexOf("Category");
+
+    if (h < 0 || e < 0 || c < 0) {
+      throw new Error("Required sheet headers missing");
     }
 
-    const text = await response.text();
-    const rows = parseCSV(text);
-
-    if (rows.length < 2) {
-      throw new Error("No sentence data found.");
-    }
-
-    const headers = rows[0].map(x => x.trim().toLowerCase());
-    const hi = headers.indexOf("hindi");
-    const en = headers.indexOf("english");
-    const cat = headers.indexOf("category");
-
-    if (hi < 0 || en < 0) {
-      throw new Error("Hindi/English headers missing.");
-    }
-
-    sentences = rows.slice(1)
-      .filter(r => r[hi]?.trim() && r[en]?.trim())
-      .map(r => ({
-        hindi: r[hi].trim(),
-        english: r[en].trim(),
-        category: cat >= 0 ? (r[cat] || "Daily") : "Daily"
-      }));
+    sentences = rows.filter(
+      r => r[h] && r[e]
+    ).map(r => ({
+      hindi:r[h].trim(),
+      english:r[e].trim(),
+      category:(r[c] || "Daily").trim()
+    }));
 
     if (!sentences.length) {
-      throw new Error("No valid sentences found.");
+      throw new Error("No sentences found");
     }
 
-    $("status").textContent =
-      "✅ Connected! " + sentences.length + " sentences loaded.";
+    const select = document.getElementById("category");
+    [...new Set(sentences.map(s=>s.category))]
+      .forEach(category=>{
+        const option = document.createElement("option");
+        option.value = category;
+        option.textContent = category;
+        select.appendChild(option);
+      });
 
+    status.textContent =
+      sentences.length + " sentences loaded!";
     nextQuestion();
-  } catch (error) {
-    $("question").textContent = "Could not load Google Sheet";
-    $("category").textContent = "Connection Error";
-    $("status").textContent =
-      "Error: " + error.message +
-      ". Check CSV publishing and browser access.";
+
+  } catch(error) {
+    document.getElementById("hindi").textContent =
+      "Could not load Google Sheets";
+    status.textContent =
+      "Connection error: " + error.message +
+      ". This may be a browser CORS restriction.";
   }
 }
 
 function nextQuestion() {
   if (!sentences.length) return;
 
-  if (recognition) recognition.abort();
+  const category =
+    document.getElementById("category").value;
+
+  const filtered = sentences.filter(s =>
+    category === "All" || s.category === category
+  );
+
+  if (!filtered.length) return;
+
+  const choices = filtered.length > 1
+    ? filtered.filter(s => s !== current)
+    : filtered;
+
+  current = choices[
+    Math.floor(Math.random() * choices.length)
+  ];
+
+  document.getElementById("hindi").textContent =
+    current.hindi;
+  document.getElementById("questionCategory").textContent =
+    current.category;
+  document.getElementById("answer").textContent =
+    "Your answer will appear here.";
+  document.getElementById("feedback").textContent =
+    "Speak your English answer.";
+}
+
+function listen() {
+  if (!current) return;
   speechSynthesis.cancel();
 
-  let index = Math.floor(Math.random() * sentences.length);
-
-  if (sentences.length > 1) {
-    while (index === lastIndex) {
-      index = Math.floor(Math.random() * sentences.length);
-    }
-  }
-
-  lastIndex = index;
-  currentQuestion = sentences[index];
-  answered = false;
-
-  $("category").textContent = currentQuestion.category;
-  $("question").textContent = currentQuestion.hindi;
-  $("yourAnswer").textContent = "Press Speak to answer.";
-  $("feedback").textContent = "";
-  $("feedback").className = "feedback";
-  $("expectedBox").hidden = true;
-  $("speakBtn").disabled = false;
-}
-
-function speakText(text, lang) {
-  if (!("speechSynthesis" in window)) {
-    alert("Text-to-speech not supported.");
-    return;
-  }
-
-  speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
-  utterance.rate = 0.85;
-  speechSynthesis.speak(utterance);
-}
-
-function listenHindi() {
-  if (currentQuestion) {
-    speakText(currentQuestion.hindi, "hi-IN");
-  }
-}
-
-function listenEnglish() {
-  if (currentQuestion) {
-    speakText(currentQuestion.english, "en-IN");
-  }
+  const voice = new SpeechSynthesisUtterance(
+    current.hindi
+  );
+  voice.lang = "hi-IN";
+  voice.rate = 0.85;
+  speechSynthesis.speak(voice);
 }
 
 function normalize(text) {
   return text.toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, "")
-    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu,"")
+    .replace(/\s+/g," ")
     .trim();
 }
 
-function showAnswer() {
-  if (!currentQuestion) return;
+function speak() {
+  if (!current) return;
 
-  $("expected").textContent = currentQuestion.english;
-  $("expectedBox").hidden = false;
-}
+  const SR = window.SpeechRecognition ||
+             window.webkitSpeechRecognition;
 
-function startSpeaking() {
-  if (!currentQuestion || answered) return;
-
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    $("feedback").textContent =
-      "Speech recognition is not supported in this browser.";
+  if (!SR) {
+    alert("Use a supported Chrome browser.");
     return;
   }
 
-  speechSynthesis.cancel();
-
-  recognition = new SpeechRecognition();
+  recognition = new SR();
   recognition.lang = "en-IN";
   recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
 
-  $("speakBtn").disabled = true;
-  $("yourAnswer").textContent = "🎤 Listening... Speak now.";
+  const button = document.getElementById("speak");
+  button.disabled = true;
 
-  recognition.onresult = event => {
+  document.getElementById("answer").textContent =
+    "Listening... speak now.";
+
+  recognition.onresult = function(event) {
     const spoken = event.results[0][0].transcript;
-    $("yourAnswer").textContent = spoken;
-    evaluateAnswer(spoken);
+    checkAnswer(spoken);
   };
 
-  recognition.onerror = event => {
-    $("feedback").textContent =
+  recognition.onerror = function(event) {
+    document.getElementById("feedback").textContent =
       "Microphone error: " + event.error;
-    $("yourAnswer").textContent = "Please try again.";
   };
 
-  recognition.onend = () => {
-    $("speakBtn").disabled = answered;
+  recognition.onend = function() {
+    button.disabled = false;
   };
 
   try {
     recognition.start();
-  } catch (e) {
-    $("feedback").textContent = e.message;
-    $("speakBtn").disabled = false;
+  } catch(error) {
+    button.disabled = false;
+    document.getElementById("feedback").textContent =
+      error.message;
   }
 }
 
-function evaluateAnswer(spoken) {
-  if (answered) return;
-  answered = true;
+function checkAnswer(spoken) {
+  if (!current) return;
 
+  const expected = current.english;
   const correct =
-    normalize(spoken) === normalize(currentQuestion.english);
+    normalize(spoken) === normalize(expected);
 
-  const feedback = $("feedback");
-  feedback.className =
-    "feedback " + (correct ? "correct" : "incorrect");
+  document.getElementById("answer").textContent =
+    "You said: " + spoken;
 
-  feedback.textContent = correct
-    ? "✅ Correct! Excellent work."
-    : "🔄 Different from expected answer. Try repeating it.";
-
-  showAnswer();
-
-  const today = new Date().toLocaleDateString("en-CA");
-  const key = "englishTrainerHistory";
-
-  let history = [];
-  try {
-    history = JSON.parse(localStorage.getItem(key) || "[]");
-    if (!Array.isArray(history)) history = [];
-  } catch (_) {
-    history = [];
-  }
+  document.getElementById("feedback").textContent =
+    (correct ? "✅ Correct!" : "❌ Not an exact match.") +
+    "\nExpected Answer: " + expected;
 
   history.push({
-    date: today,
-    question: currentQuestion.hindi,
-    expected: currentQuestion.english,
-    spoken: spoken,
-    correct: correct
+    date:new Date().toISOString(),
+    question:current.hindi,
+    expected:expected,
+    answer:spoken,
+    correct:correct
   });
 
   try {
-    localStorage.setItem(key, JSON.stringify(history));
-  } catch (_) {
-    $("status").textContent =
-      "Answer checked, but local history could not be saved.";
+    localStorage.setItem(
+      "englishPractice",
+      JSON.stringify(history)
+    );
+  } catch(error) {
+    document.getElementById("status").textContent =
+      "Could not save progress in this browser.";
   }
 
   updateStats();
 }
 
+function showAnswer() {
+  if (!current) return;
+  document.getElementById("feedback").textContent =
+    "Expected Answer: " + current.english;
+}
+
 function updateStats() {
-  let history = [];
+  const total = history.length;
+  const correct = history.filter(x=>x.correct).length;
 
-  try {
-    history = JSON.parse(
-      localStorage.getItem("englishTrainerHistory") || "[]"
-    );
-    if (!Array.isArray(history)) history = [];
-  } catch (_) {
-    history = [];
-  }
-
-  const today = new Date().toLocaleDateString("en-CA");
-  const todayHistory = history.filter(x => x.date === today);
-
-  const total = todayHistory.length;
-  const correct = todayHistory.filter(x => x.correct).length;
-
-  $("total").textContent = total;
-  $("correct").textContent = correct;
-  $("accuracy").textContent =
-    total ? Math.round(correct / total * 100) + "%" : "0%";
+  document.getElementById("total").textContent = total;
+  document.getElementById("correct").textContent = correct;
+  document.getElementById("accuracy").textContent =
+    total ? Math.round(correct/total*100)+"%" : "0%";
 }
 
 updateStats();
