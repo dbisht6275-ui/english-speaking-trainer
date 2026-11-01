@@ -1,0 +1,87 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>English Speaking Trainer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #eef3fa;
+      text-align: center;
+      padding: 40px 15px;
+    }
+    .card {
+      background: white;
+      max-width: 500px;
+      margin: 40px auto;
+      padding: 30px;
+      border-radius: 18px;
+      box-shadow: 0 5px 25px #0001;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: 0;
+      border-radius: 10px;
+      padding: 15px 25px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #result { margin-top: 25px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>English Speaking Trainer</h1>
+    <h2>Microphone Test</h2>
+    <p>Press Speak and say something in English.</p>
+    <button id="speak" onclick="startSpeaking()">🎤 Speak</button>
+    <p id="result">Ready to speak</p>
+  </div>
+
+  <script>
+    function startSpeaking() {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      const result = document.getElementById("result");
+      const button = document.getElementById("speak");
+
+      if (!SpeechRecognition) {
+        result.textContent = "Speech recognition is not supported.";
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-IN";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      button.disabled = true;
+      result.textContent = "Listening... Please speak.";
+
+      recognition.onresult = function(event) {
+        result.textContent =
+          "You said: " + event.results[0][0].transcript;
+      };
+
+      recognition.onerror = function(event) {
+        result.textContent = "Microphone error: " + event.error;
+      };
+
+      recognition.onend = function() {
+        button.disabled = false;
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        result.textContent = "Error: " + error.message;
+        button.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
