@@ -473,20 +473,23 @@ async function loadSentences() {
     const h = headers.indexOf("Hindi");
     const e = headers.indexOf("English");
     const c = headers.indexOf("Category");
-
+    const a = headers.indexOf("Alternatives");
     if(h < 0 || e < 0 || c < 0) {
       throw new Error("Required headers missing");
     }
 
-    sentences = rows.filter(r =>
-      r[h] && r[e]
-    ).map(r => ({
-
-      hindi:r[h].trim(),
-      english:r[e].trim(),
-      category:(r[c] || "Daily").trim()
-
+    
+    sentences = rows.filter(r => r[h] && r[e]).map(r => ({
+      hindi: r[h].trim(),
+      english: r[e].trim(),
+      category: (r[c] || "Daily").trim(),
+      alternatives: a >= 0
+        ? String(r[a] || "").split(";")
+            .map(x => x.trim())
+            .filter(Boolean)
+        : []
     }));
+
 
     if(!sentences.length) {
       throw new Error("No sentences found");
@@ -728,6 +731,39 @@ function normalize(text) {
 
 }
 
+function smartCheckAnswer(spoken, question) {
+
+  function clean(text) {
+    return normalize(text)
+      .replace(/\bi'll\b/g, "i will")
+      .replace(/\bi'm\b/g, "i am")
+      .replace(/\bdon't\b/g, "do not")
+      .replace(/\bcan't\b/g, "cannot")
+      .replace(/\bwon't\b/g, "will not")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const accepted = [
+    question.english,
+    ...(question.alternatives || [])
+  ];
+
+  const spokenClean = clean(spoken);
+
+  const matched = accepted.some(
+    answer => clean(answer) === spokenClean
+  );
+
+  return {
+    correct: matched,
+    feedback: matched
+      ? "✅ Correct! Well done."
+      : "🔄 Your answer doesn't match the accepted answers. Check the correct sentence and try again."
+  };
+}
+  
+
 /* MICROPHONE */
 
 function startSpeaking() {
@@ -803,16 +839,14 @@ function checkAnswer(spoken) {
 
   if(!current) return;
 
-  const correct =
-    normalize(spoken) === normalize(current.english);
+  const result = smartCheckAnswer(spoken, current);
+  const correct = result.correct;
 
   document.getElementById("answer").textContent =
     "You said: " + spoken;
 
   document.getElementById("feedback").textContent =
-    correct
-      ? "✅ Correct Answer!"
-      : "🔄 Different from expected answer. Try again.";
+  result.feedback;
 
   showAnswer();
 
