@@ -271,36 +271,18 @@ function loadGoogleVisualization(){
 }
 
 async function getSheetRows(){
- // Keep the original Google Sheets publication URL. Some browsers block
- // reading Google's cross-origin CSV response even though the sheet is public.
- const urls=[
-  {name:"Google Sheets direct",url:CSV_URL},
-  {name:"CORS relay A",url:"https://api.allorigins.win/raw?url="+encodeURIComponent(CSV_URL)},
-  {name:"CORS relay B",url:"https://corsproxy.io/?url="+encodeURIComponent(CSV_URL)}
- ];
- const failures=[];
- for(const source of urls){
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),9000);
-  try{
-   const response=await fetch(source.url,{cache:"no-store",signal:controller.signal});
-   if(!response.ok) throw new Error("HTTP "+response.status);
-   const csvText=await response.text();
-   if(!csvText.trim() || /^\s*<!doctype html|^\s*<html/i.test(csvText))
-    throw new Error("Non-CSV or empty response");
-   const rows=parseCSV(csvText);
-   if(!rows.length) throw new Error("No rows");
-   const heads=rows[0].map(x=>String(x||"").trim().toLowerCase());
-   if(!heads.includes("hindi") || !heads.includes("english") || !heads.includes("category"))
-    throw new Error("Invalid columns (expected Hindi, English, Category)");
-   console.info("Google Sheet loaded using:",source.name);
-   return rows;
-  }catch(error){
-   failures.push(source.name+": "+error.message);
-   console.warn("Sheet source failed:",source.name,error);
-  }finally{clearTimeout(timeout);}
+ // Read the published CSV through our Cloudflare Worker to avoid browser CORS blocks.
+ const response=await fetch(AI_WORKER_URL.replace(/\/$/,"")+"/sheets",{cache:"no-store"});
+ if(!response.ok){
+  const message=await response.text();
+  throw new Error("Worker /sheets HTTP "+response.status+": "+message.slice(0,200));
  }
- throw new Error(failures.join("; ")+". If all sources are blocked, configure a /sheets proxy on your Cloudflare Worker for reliable access.");
+ const csvText=await response.text();
+ if(!csvText.trim() || /^\s*<!doctype html|^\s*<html/i.test(csvText))
+  throw new Error("Worker did not return a CSV file");
+ const rows=parseCSV(csvText);
+ if(!rows.length) throw new Error("Google Sheets returned no rows");
+ return rows;
 }
 
 async function loadSentences(){
