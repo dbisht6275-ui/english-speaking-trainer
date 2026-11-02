@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -243,93 +242,110 @@ function parseCSV(text) {
  return rows;
 }
 
+// Google's published CSV can be blocked by browser CORS policies.
+// As a backup, the public Google Visualization endpoint is loaded as JSONP
+// (a script tag), which does not depend on fetch CORS permissions.
+function loadGoogleVisualization(){
+ return new Promise((resolve,reject)=>{
+  const publishedId=(CSV_URL.match(/\/d\/e\/([^/]+)\/pub/)||[])[1];
+  if(!publishedId) return reject(new Error("Published Google Sheet ID was not found"));
+  const callback="englishTrainerSheet_"+Date.now()+"_"+Math.floor(Math.random()*1e6);
+  const script=document.createElement("script");
+  let settled=false;
+  const cleanup=()=>{clearTimeout(timer);script.remove();delete window[callback];};
+  const finish=(error,rows)=>{if(settled)return;settled=true;cleanup();error?reject(error):resolve(rows);};
+  window[callback]=data=>{
+   if(!data || data.status==="error" || !data.table){
+    return finish(new Error("Google Visualization returned no public sheet data"));
+   }
+   const columns=(data.table.cols||[]).map(c=>String(c.label||c.id||""));
+   const rows=(data.table.rows||[]).map(r=>(r.c||[]).map(c=>c==null?"":String(c.f??c.v??"")));
+   finish(null,[columns,...rows]);
+  };
+  const timer=setTimeout(()=>finish(new Error("Google Visualization timed out")),10000);
+  script.onerror=()=>finish(new Error("Google Visualization public endpoint unavailable"));
+  script.src="https://docs.google.com/spreadsheets/d/e/"+encodeURIComponent(publishedId)+
+   "/gviz/tq?tqx="+encodeURIComponent("responseHandler:"+callback)+"&gid=0";
+  document.head.appendChild(script);
+ });
+}
+
+async function getSheetRows(){
+ // Keep the original Google Sheets publication URL. Some browsers block
+ // reading Google's cross-origin CSV response even though the sheet is public.
+ const urls=[
+  {name:"Google Sheets direct",url:CSV_URL},
+  {name:"CORS relay A",url:"https://api.allorigins.win/raw?url="+encodeURIComponent(CSV_URL)},
+  {name:"CORS relay B",url:"https://corsproxy.io/?url="+encodeURIComponent(CSV_URL)}
+ ];
+ const failures=[];
+ for(const source of urls){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),9000);
+  try{
+   const response=await fetch(source.url,{cache:"no-store",signal:controller.signal});
+   if(!response.ok) throw new Error("HTTP "+response.status);
+   const csvText=await response.text();
+   if(!csvText.trim() || /^\s*<!doctype html|^\s*<html/i.test(csvText))
+    throw new Error("Non-CSV or empty response");
+   const rows=parseCSV(csvText);
+   if(!rows.length) throw new Error("No rows");
+   const heads=rows[0].map(x=>String(x||"").trim().toLowerCase());
+   if(!heads.includes("hindi") || !heads.includes("english") || !heads.includes("category"))
+    throw new Error("Invalid columns (expected Hindi, English, Category)");
+   console.info("Google Sheet loaded using:",source.name);
+   return rows;
+  }catch(error){
+   failures.push(source.name+": "+error.message);
+   console.warn("Sheet source failed:",source.name,error);
+  }finally{clearTimeout(timeout);}
+ }
+ throw new Error(failures.join("; ")+". If all sources are blocked, configure a /sheets proxy on your Cloudflare Worker for reliable access.");
+}
+
 async function loadSentences(){
- // Google Sheets uses the original published CSV URL; do not change this URL.
  el("questionProgress").textContent="Loading Questions...";
  el("hindi").textContent="Connecting to Google Sheets...";
- let lastError;
  try{
-  let csvText="";
-  // Retry once for transient HTTP/network errors. Never retry invalid CSV data.
-  for(let attempt=1;attempt<=2;attempt++){
-   try{
-    const response=await fetch(CSV_URL,{cache:"no-store",redirect:"follow"});
-    if(!response.ok){
-     throw new Error("Sheet HTTP "+response.status+
-       (response.status===403?" (published Sheet permission/access issue)":
-        response.status===404?" (published Sheet not found)":""));
-    }
-    csvText=await response.text();
-    break;
-   }catch(error){
-    lastError=error;
-    if(attempt===2 || /Sheet HTTP (400|401|403|404)\b/.test(error.message)) throw error;
-    await new Promise(resolve=>setTimeout(resolve,700));
-   }
-  }
-
-  if(!csvText.trim()) throw new Error("Published Google Sheet returned an empty CSV");
-  if(/^\s*<!doctype html|^\s*<html/i.test(csvText))
-   throw new Error("Google Sheets returned HTML instead of CSV. Check Publish to web settings.");
-
-  const rows=parseCSV(csvText);
-  if(!rows.length) throw new Error("Published Google Sheet contains no rows");
-
-  const headers=rows.shift().map(x=>x.trim().replace(/^\uFEFF/,""));
-  const h=headers.indexOf("Hindi");
-  const e=headers.indexOf("English");
-  const c=headers.indexOf("Category");
-  const a=headers.indexOf("Alternatives");
-  if(h<0 || e<0 || c<0){
-   throw new Error("CSV headers missing. Expected Hindi, English, Category; received: "+
-    headers.slice(0,8).join(", "));
-  }
-
-  const loaded=rows.filter(r=>r[h] && r[e]).map(r=>({
-   hindi:r[h].trim(),
-   english:r[e].trim(),
-   category:(r[c]||"Daily").trim(),
-   alternatives:a>=0
-    ?String(r[a]||"").split(";").map(x=>x.trim()).filter(Boolean)
-    :[]
+  const rows=await getSheetRows();
+  if(!rows.length) throw new Error("Google Sheets returned no rows");
+  const clean=x=>String(x??"").replace(/^\uFEFF/,"").trim();
+  // Allow harmless differences in CSV column capitalization and whitespace.
+  const headers=rows.shift().map(clean);
+  const normalized=headers.map(x=>x.toLowerCase());
+  const h=normalized.indexOf("hindi");
+  const e=normalized.indexOf("english");
+  const c=normalized.indexOf("category");
+  const a=normalized.indexOf("alternatives");
+  if(h<0 || e<0 || c<0)
+   throw new Error("Missing Hindi, English or Category header. Found: "+headers.slice(0,8).join(", "));
+  const loaded=rows.filter(r=>clean(r[h])&&clean(r[e])).map(r=>({
+   hindi:clean(r[h]),english:clean(r[e]),
+   category:clean(r[c])||"Daily",
+   alternatives:a>=0?clean(r[a]).split(";").map(x=>x.trim()).filter(Boolean):[]
   }));
-  if(!loaded.length) throw new Error("No valid Hindi/English sentences in published CSV");
+  if(!loaded.length) throw new Error("No valid Hindi/English sentences in public sheet");
   sentences=loaded;
-
   const select=el("category");
   const previousCategory=select.value;
   select.innerHTML='<option value="All">All Categories</option>';
   [...new Set(sentences.map(s=>s.category))].forEach(cat=>{
    const option=document.createElement("option");
-   option.value=cat;
-   option.textContent=cat;
-   select.appendChild(option);
+   option.value=cat;option.textContent=cat;select.appendChild(option);
   });
-  if([...select.options].some(option=>option.value===previousCategory)){
-   select.value=previousCategory;
-  }
-
+  if([...select.options].some(option=>option.value===previousCategory))select.value=previousCategory;
   el("status").textContent=sentences.length+" sentences loaded from Google Sheets.";
-  resetRound();
-  updateDashboard();
+  resetRound();updateDashboard();
  }catch(error){
-  const detail=String(error && error.message || error || lastError || "Unknown error");
-  const networkHint=(error instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(detail))
-   ?" Browser could not fetch the published CSV (network, CORS, browser extension, or local-file restrictions)."
-   :"";
+  const detail=String(error?.message||error);
   el("questionProgress").textContent="Questions could not be loaded";
   el("hindi").textContent="Google Sheets Connection Failed";
-  el("feedback").textContent="Google Sheets error: "+detail+networkHint;
-  const status=el("status");
-  status.replaceChildren();
-  const message=document.createElement("span");
-  message.textContent="Load failed: "+detail+networkHint+" ";
-  const retry=document.createElement("button");
-  retry.type="button";
-  retry.className="secondary";
-  retry.textContent="Retry Google Sheets";
-  retry.addEventListener("click",loadSentences);
-  status.append(message,retry);
+  el("feedback").textContent="Google Sheets error: "+detail;
+  const status=el("status");status.replaceChildren();
+  const message=document.createElement("span");message.textContent="Load failed: "+detail+" ";
+  const retry=document.createElement("button");retry.type="button";
+  retry.className="secondary";retry.textContent="Retry Google Sheets";
+  retry.addEventListener("click",loadSentences);status.append(message,retry);
   console.error("English Trainer Google Sheets load failed:",error);
  }
 }
