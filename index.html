@@ -43,6 +43,21 @@ button:disabled{opacity:.45;cursor:not-allowed}
  .practice-buttons{overflow-x:auto;justify-content:flex-start;padding-bottom:5px}
  .practice-buttons button{flex:0 0 auto;font-size:12px;padding:12px 10px}
 }
+
+/* AI Teacher Voice Settings — isolated styles */
+.voice-settings h3{margin:0 0 8px;color:#14243e}
+.voice-settings .voice-subtitle{color:#64748b;font-size:13px;margin:0 0 16px;line-height:1.5}
+.voice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.voice-settings label{margin-top:0;font-size:14px}
+.voice-settings select{margin-top:7px}
+.voice-speed{margin-top:17px}
+.voice-speed-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.voice-speed input[type=range]{width:100%;accent-color:#2563eb;margin-top:12px;cursor:pointer}
+.voice-speed-output{font-weight:bold;color:#2563eb;font-size:15px}
+.voice-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.voice-actions button{min-height:44px}
+#voiceStatus{font-size:13px;line-height:1.5;color:#475569;margin:13px 0 0;overflow-wrap:anywhere}
+@media(max-width:480px){.voice-grid{grid-template-columns:1fr}.voice-actions button{flex:1}}
 </style>
 </head>
 <body>
@@ -66,6 +81,42 @@ button:disabled{opacity:.45;cursor:not-allowed}
  <div class="stat"><b id="allAccuracy">0%</b><small>Overall Accuracy</small></div>
  <div class="stat"><b id="wrongCount">0</b><small>Needs Revision</small></div>
 </div>
+</div>
+
+
+<!-- AI Teacher Voice Settings: browser speech synthesis, no paid API -->
+<div class="card voice-settings" id="voiceSettingsCard">
+  <h3>🔊 AI Teacher Voice Settings</h3>
+  <p class="voice-subtitle">Choose how your English teacher sounds. Voices depend on your browser and device.</p>
+  <div class="voice-grid">
+    <div>
+      <label for="voiceGender">Voice Gender</label>
+      <select id="voiceGender">
+        <option value="female">Female</option>
+        <option value="male">Male</option>
+      </select>
+    </div>
+    <div>
+      <label for="voiceAccent">English Accent</label>
+      <select id="voiceAccent">
+        <option value="en-IN">Indian English</option>
+        <option value="en-GB">British English</option>
+        <option value="en-US">American English</option>
+      </select>
+    </div>
+  </div>
+  <div class="voice-speed">
+    <div class="voice-speed-header">
+      <label for="voiceSpeed">Speaking Speed</label>
+      <output class="voice-speed-output" id="voiceSpeedValue" for="voiceSpeed">0.85x</output>
+    </div>
+    <input id="voiceSpeed" type="range" min="0.6" max="1.5" step="0.05" value="0.85" aria-label="Speaking speed">
+  </div>
+  <div class="voice-actions">
+    <button class="green" id="testVoiceBtn" type="button" onclick="testTeacherVoice()">▶ Test Voice</button>
+    <button class="secondary" id="stopVoiceBtn" type="button" onclick="stopTeacherVoice()">■ Stop Voice</button>
+  </div>
+  <p id="voiceStatus" role="status" aria-live="polite">Checking available browser voices...</p>
 </div>
 
 <div class="card">
@@ -193,25 +244,48 @@ function parseCSV(text) {
 }
 
 async function loadSentences(){
+ // Google Sheets uses the original published CSV URL; do not change this URL.
+ el("questionProgress").textContent="Loading Questions...";
+ el("hindi").textContent="Connecting to Google Sheets...";
+ let lastError;
  try{
-  const response = await fetch(CSV_URL,{cache:"no-store"});
-  if(!response.ok) throw Error("Sheet HTTP "+response.status);
+  let csvText="";
+  // Retry once for transient HTTP/network errors. Never retry invalid CSV data.
+  for(let attempt=1;attempt<=2;attempt++){
+   try{
+    const response=await fetch(CSV_URL,{cache:"no-store",redirect:"follow"});
+    if(!response.ok){
+     throw new Error("Sheet HTTP "+response.status+
+       (response.status===403?" (published Sheet permission/access issue)":
+        response.status===404?" (published Sheet not found)":""));
+    }
+    csvText=await response.text();
+    break;
+   }catch(error){
+    lastError=error;
+    if(attempt===2 || /Sheet HTTP (400|401|403|404)\b/.test(error.message)) throw error;
+    await new Promise(resolve=>setTimeout(resolve,700));
+   }
+  }
 
-  const rows = parseCSV(await response.text());
-  if(!rows.length) throw Error("Sheet is empty");
+  if(!csvText.trim()) throw new Error("Published Google Sheet returned an empty CSV");
+  if(/^\s*<!doctype html|^\s*<html/i.test(csvText))
+   throw new Error("Google Sheets returned HTML instead of CSV. Check Publish to web settings.");
 
-  const headers = rows.shift().map(x =>
-   x.trim().replace(/^\uFEFF/,"")
-  );
+  const rows=parseCSV(csvText);
+  if(!rows.length) throw new Error("Published Google Sheet contains no rows");
 
+  const headers=rows.shift().map(x=>x.trim().replace(/^\uFEFF/,""));
   const h=headers.indexOf("Hindi");
   const e=headers.indexOf("English");
   const c=headers.indexOf("Category");
   const a=headers.indexOf("Alternatives");
+  if(h<0 || e<0 || c<0){
+   throw new Error("CSV headers missing. Expected Hindi, English, Category; received: "+
+    headers.slice(0,8).join(", "));
+  }
 
-  if(h<0 || e<0 || c<0) throw Error("Required headers missing");
-
-  sentences=rows.filter(r=>r[h] && r[e]).map(r=>({
+  const loaded=rows.filter(r=>r[h] && r[e]).map(r=>({
    hindi:r[h].trim(),
    english:r[e].trim(),
    category:(r[c]||"Daily").trim(),
@@ -219,28 +293,44 @@ async function loadSentences(){
     ?String(r[a]||"").split(";").map(x=>x.trim()).filter(Boolean)
     :[]
   }));
-
-  if(!sentences.length) throw Error("No sentences found");
+  if(!loaded.length) throw new Error("No valid Hindi/English sentences in published CSV");
+  sentences=loaded;
 
   const select=el("category");
+  const previousCategory=select.value;
   select.innerHTML='<option value="All">All Categories</option>';
-
   [...new Set(sentences.map(s=>s.category))].forEach(cat=>{
    const option=document.createElement("option");
    option.value=cat;
    option.textContent=cat;
    select.appendChild(option);
   });
+  if([...select.options].some(option=>option.value===previousCategory)){
+   select.value=previousCategory;
+  }
 
-  el("status").textContent=
-   sentences.length+" sentences loaded from Google Sheets.";
-
+  el("status").textContent=sentences.length+" sentences loaded from Google Sheets.";
   resetRound();
   updateDashboard();
-
  }catch(error){
+  const detail=String(error && error.message || error || lastError || "Unknown error");
+  const networkHint=(error instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(detail))
+   ?" Browser could not fetch the published CSV (network, CORS, browser extension, or local-file restrictions)."
+   :"";
+  el("questionProgress").textContent="Questions could not be loaded";
   el("hindi").textContent="Google Sheets Connection Failed";
-  el("status").textContent=error.message;
+  el("feedback").textContent="Google Sheets error: "+detail+networkHint;
+  const status=el("status");
+  status.replaceChildren();
+  const message=document.createElement("span");
+  message.textContent="Load failed: "+detail+networkHint+" ";
+  const retry=document.createElement("button");
+  retry.type="button";
+  retry.className="secondary";
+  retry.textContent="Retry Google Sheets";
+  retry.addEventListener("click",loadSentences);
+  status.append(message,retry);
+  console.error("English Trainer Google Sheets load failed:",error);
  }
 }
 
@@ -345,10 +435,18 @@ function startNewRound(){
 
 function play(text,lang){
  if(!text)return;
+ if(!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)){
+  el("voiceStatus").textContent="Text-to-speech is not supported in this browser.";
+  return;
+ }
  speechSynthesis.cancel();
  const speech=new SpeechSynthesisUtterance(text);
  speech.lang=lang;
  speech.rate=.85;
+ // Apply teacher settings only to English audio; preserve Hindi playback.
+ if(lang.toLowerCase().startsWith("en")){
+  configureTeacherUtterance(speech);
+ }
  speechSynthesis.speak(speech);
 }
 
@@ -449,6 +547,132 @@ async function geminiCheck(spoken,question){
 
  }finally{
   clearTimeout(timer);
+ }
+}
+
+
+/* BROWSER VOICE SETTINGS — no cloud TTS, existing AI and sheets unaffected */
+const VOICE_SETTINGS_KEY="englishTeacherVoiceSettingsV1";
+const VOICE_SAMPLE="Hello! Welcome to your English Speaking Practice. Let's improve your English step by step.";
+const VOICE_DEFAULTS={gender:"female",accent:"en-IN",speed:0.85};
+let teacherVoiceSettings={...VOICE_DEFAULTS};
+let availableTeacherVoices=[];
+let teacherVoiceRequest=0;
+
+function supportsTeacherVoice(){
+ return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function loadTeacherVoiceSettings(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(VOICE_SETTINGS_KEY)||"null");
+  if(saved && typeof saved==="object"){
+   if(["male","female"].includes(saved.gender)) teacherVoiceSettings.gender=saved.gender;
+   if(["en-IN","en-GB","en-US"].includes(saved.accent)) teacherVoiceSettings.accent=saved.accent;
+   if(Number.isFinite(saved.speed)) teacherVoiceSettings.speed=Math.min(1.5,Math.max(0.6,saved.speed));
+  }
+ }catch(error){/* Invalid storage: continue with defaults. */}
+ el("voiceGender").value=teacherVoiceSettings.gender;
+ el("voiceAccent").value=teacherVoiceSettings.accent;
+ el("voiceSpeed").value=String(teacherVoiceSettings.speed);
+ el("voiceSpeedValue").textContent=teacherVoiceSettings.speed.toFixed(2).replace(/0$/,'').replace(/\.$/,'')+"x";
+}
+
+function saveTeacherVoiceSettings(){
+ teacherVoiceSettings={
+  gender:el("voiceGender").value,
+  accent:el("voiceAccent").value,
+  speed:Number(el("voiceSpeed").value)
+ };
+ el("voiceSpeedValue").textContent=teacherVoiceSettings.speed.toFixed(2).replace(/0$/,'').replace(/\.$/,'')+"x";
+ try{localStorage.setItem(VOICE_SETTINGS_KEY,JSON.stringify(teacherVoiceSettings));}
+ catch(error){el("voiceStatus").textContent="Voice settings could not be saved in this browser.";}
+}
+
+// Browsers do not expose a standard gender field for SpeechSynthesisVoice.
+// These name hints are preferences, never a guarantee of a male/female voice.
+const FEMALE_VOICE_HINTS=["female","woman","zira","samantha","victoria","karen","moira","tessa","veena","heera","susan","hazel","serena","ava","allison","aria","jenny","emma","siri female"];
+const MALE_VOICE_HINTS=["male","man","david","mark","daniel","alex","rishi","ravi","george","james","fred","tom","aaron","arthur","guy","ryan","oliver","siri male"];
+function genderHint(voice){
+ const n=(voice.name||"").toLowerCase();
+ const female=FEMALE_VOICE_HINTS.some(x=>n.includes(x));
+ const male=MALE_VOICE_HINTS.some(x=>n.includes(x));
+ return female&&!male?"female":male&&!female?"male":null;
+}
+function findTeacherVoice(){
+ const english=availableTeacherVoices.filter(v=>/^en(?:[-_]|$)/i.test(v.lang||""));
+ if(!english.length) return null;
+ const wanted=teacherVoiceSettings.accent.toLowerCase();
+ const gender=teacherVoiceSettings.gender;
+ const exact=english.filter(v=>(v.lang||"").replace("_","-").toLowerCase()===wanted);
+ // Accent wins over a known gender hint; within that accent prefer desired gender.
+ const candidates=exact.length?exact:english;
+ const preferred=candidates.find(v=>genderHint(v)===gender);
+ return preferred||candidates.find(v=>genderHint(v)===null)||candidates[0];
+}
+function updateTeacherVoiceStatus(){
+ if(!supportsTeacherVoice()){
+  el("voiceStatus").textContent="Speech synthesis is not supported by this browser. Try an updated Chrome, Edge, or Safari.";
+  return;
+ }
+ const voice=findTeacherVoice();
+ if(!voice){
+  el("voiceStatus").textContent="No English voice is available yet. Try again after the browser loads its voices or enable an English system voice.";
+  return;
+ }
+ const accentMatch=(voice.lang||"").replace("_","-").toLowerCase()===teacherVoiceSettings.accent.toLowerCase();
+ const genderMatch=genderHint(voice)===teacherVoiceSettings.gender;
+ el("voiceStatus").textContent="Selected browser voice: "+voice.name+" ("+voice.lang+"). "+
+  (!accentMatch?"Requested accent unavailable; closest English voice selected. ":"")+
+  (!genderMatch?"Requested gender cannot be guaranteed with available voices.":"Voice gender is estimated from its name.");
+}
+function refreshTeacherVoices(){
+ if(!supportsTeacherVoice()) return updateTeacherVoiceStatus();
+ availableTeacherVoices=window.speechSynthesis.getVoices()||[];
+ updateTeacherVoiceStatus();
+}
+function configureTeacherUtterance(utterance){
+ utterance.lang=teacherVoiceSettings.accent;
+ utterance.rate=teacherVoiceSettings.speed;
+ const voice=findTeacherVoice();
+ if(voice){utterance.voice=voice;utterance.lang=voice.lang;}
+ return voice;
+}
+function testTeacherVoice(){
+ if(!supportsTeacherVoice())return updateTeacherVoiceStatus();
+ saveTeacherVoiceSettings();
+ refreshTeacherVoices();
+ const voice=findTeacherVoice();
+ if(!voice){
+  el("voiceStatus").textContent="No English voice is available. Please install or enable an English voice in your device settings.";
+  return;
+ }
+ const synth=window.speechSynthesis;
+ synth.cancel();
+ const requestId=++teacherVoiceRequest;
+ const utterance=new SpeechSynthesisUtterance(VOICE_SAMPLE);
+ configureTeacherUtterance(utterance);
+ utterance.onstart=()=>{if(requestId===teacherVoiceRequest)el("voiceStatus").textContent="Speaking with "+voice.name+" ("+voice.lang+") at "+teacherVoiceSettings.speed+"x.";};
+ utterance.onend=()=>{if(requestId===teacherVoiceRequest)updateTeacherVoiceStatus();};
+ utterance.onerror=event=>{if(requestId===teacherVoiceRequest && event.error!=="canceled" && event.error!=="interrupted")el("voiceStatus").textContent="Voice playback failed ("+event.error+"). Check device sound and browser voice availability.";};
+ synth.speak(utterance); // Called directly from a user tap for mobile compatibility.
+}
+function stopTeacherVoice(){
+ if(!supportsTeacherVoice())return updateTeacherVoiceStatus();
+ ++teacherVoiceRequest;
+ window.speechSynthesis.cancel();
+ el("voiceStatus").textContent="Voice stopped.";
+}
+function initializeTeacherVoiceSettings(){
+ loadTeacherVoiceSettings();
+ ["voiceGender","voiceAccent"].forEach(id=>el(id).addEventListener("change",()=>{
+  saveTeacherVoiceSettings();refreshTeacherVoices();
+ }));
+ el("voiceSpeed").addEventListener("input",saveTeacherVoiceSettings);
+ if(!supportsTeacherVoice())return updateTeacherVoiceStatus();
+ refreshTeacherVoices();
+ if("onvoiceschanged" in window.speechSynthesis){
+  window.speechSynthesis.addEventListener("voiceschanged",refreshTeacherVoices);
  }
 }
 
@@ -697,6 +921,7 @@ function downloadHistory(){
 
 /* START */
 
+initializeTeacherVoiceSettings();
 updateDashboard();
 loadSentences();
 </script>
